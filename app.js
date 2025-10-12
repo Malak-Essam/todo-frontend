@@ -101,9 +101,9 @@ function setupAuthForms() {
 function setupDashboard() {
     // --- DOM Elements ---
     const logoutBtn = document.getElementById('logout-btn');
-    const todoForm = document.getElementById('todo-form');
-    const todoInput = document.getElementById('todo-input');
-    const todoListEl = document.getElementById('todo-list');
+    const listForm = document.getElementById('todo-form');
+    const listInput = document.getElementById('todo-input');
+    const listEl = document.getElementById('todo-list');
     const taskForm = document.getElementById('task-form');
     const taskInput = document.getElementById('task-input');
     const taskListEl = document.getElementById('task-list');
@@ -111,7 +111,23 @@ function setupDashboard() {
 
     // --- State ---
     const token = localStorage.getItem('token');
-    let selectedListId = null;
+    let selectedList = null;
+
+    // --- Generic API Fetch Function ---
+    const apiFetch = async (endpoint, options = {}) => {
+        const defaultOptions = {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        };
+        const response = await fetch(`${API_URL}${endpoint}`, { ...defaultOptions, ...options });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Request to ${endpoint} failed.`);
+        }
+        return response.status === 204 ? null : response.json();
+    };
 
     // --- Event Listeners ---
     logoutBtn.addEventListener('click', () => {
@@ -119,139 +135,111 @@ function setupDashboard() {
         window.location.href = 'index.html';
     });
 
-    todoForm.addEventListener('submit', (e) => {
+    listForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const title = todoInput.value.trim();
+        const title = listInput.value.trim();
         if (title) {
-            addTodoList(title);
-            todoInput.value = '';
+            await apiFetch('/lists', { method: 'POST', body: JSON.stringify({ title }) });
+            listInput.value = '';
+            await fetchLists();
         }
     });
 
-    taskForm.addEventListener('submit', (e) => {
+    taskForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const title = taskInput.value.trim();
-        if (title && selectedListId) {
-            addTask(selectedListId, title);
+        if (title && selectedList) {
+            await apiFetch(`/tasks?listId=${selectedList.id}`, { method: 'POST', body: JSON.stringify({ title, status: 'PENDING' }) });
             taskInput.value = '';
+            await fetchTasks(selectedList.id);
         }
     });
 
-    // --- API Calls: Todo Lists ---
-    const fetchTodoLists = async () => {
-        try {
-            const response = await fetch(`${API_URL}/lists`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Could not fetch todo lists.');
-            const lists = await response.json();
-            renderTodoLists(lists);
-        } catch (error) {
-            alert(error.message);
-        }
+    // --- Core Functions ---
+    const fetchLists = async () => {
+        const lists = await apiFetch('/lists');
+        renderLists(lists);
     };
 
-    const addTodoList = async (title) => {
-        try {
-            const response = await fetch(`${API_URL}/lists`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ title: title, description: "" })
-            });
-            if (!response.ok) throw new Error('Could not add todo list.');
-            fetchTodoLists();
-        } catch (error) {
-            alert(error.message);
-        }
-    };
-
-    const deleteTodoList = async (listId) => {
-        try {
-            const response = await fetch(`${API_URL}/lists/${listId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Could not delete todo list.');
-            if (selectedListId === listId) {
-                resetTaskView();
-            }
-            fetchTodoLists();
-        } catch (error) {
-            alert(error.message);
-        }
-    };
-
-    // --- API Calls: Tasks ---
     const fetchTasks = async (listId) => {
-        try {
-            const response = await fetch(`${API_URL}/tasks/list/${listId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Could not fetch tasks.');
-            const tasks = await response.json();
-            renderTasks(tasks);
-        } catch (error) {
-            alert(error.message);
-        }
+        const tasks = await apiFetch(`/tasks/list/${listId}`);
+        renderTasks(tasks);
     };
 
-    const addTask = async (listId, title) => {
-        try {
-            const response = await fetch(`${API_URL}/tasks?listId=${listId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ title: title, description: "", status: "PENDING" })
-            });
-            if (!response.ok) throw new Error('Could not add task.');
-            fetchTasks(listId);
-        } catch (error) {
-            alert(error.message);
-        }
-    };
+    const makeEditable = (element, onSave) => {
+        element.setAttribute('contenteditable', true);
+        element.focus();
+        const originalText = element.textContent;
 
-    const deleteTask = async (taskId) => {
-        try {
-            const response = await fetch(`${API_URL}/tasks/${taskId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Could not delete task.');
-            fetchTasks(selectedListId);
-        } catch (error) {
-            alert(error.message);
-        }
+        const save = async () => {
+            element.removeAttribute('contenteditable');
+            const newText = element.textContent.trim();
+            if (newText && newText !== originalText) {
+                try {
+                    await onSave(newText);
+                } catch (error) {
+                    alert(`Error saving: ${error.message}`);
+                    element.textContent = originalText; // Revert on failure
+                }
+            } else {
+                element.textContent = originalText; // Revert if empty or unchanged
+            }
+        };
+
+        element.addEventListener('blur', save);
+        element.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                save();
+            } else if (e.key === 'Escape') {
+                element.textContent = originalText;
+                element.removeAttribute('contenteditable');
+            }
+        });
     };
 
     // --- Rendering ---
-    const renderTodoLists = (lists) => {
-        todoListEl.innerHTML = '';
+    const renderLists = (lists) => {
+        listEl.innerHTML = '';
         lists.forEach(list => {
             const li = document.createElement('li');
-            li.textContent = list.title;
             li.dataset.id = list.id;
-            if (list.id === selectedListId) {
+            if (selectedList && list.id === selectedList.id) {
                 li.classList.add('selected');
             }
 
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = list.title;
+            titleSpan.className = 'task-title';
+            titleSpan.addEventListener('dblclick', () => {
+                makeEditable(titleSpan, (newTitle) => 
+                    apiFetch(`/lists/${list.id}`, { method: 'PUT', body: JSON.stringify({ ...list, title: newTitle }) })
+                );
+            });
+            li.appendChild(titleSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '✖';
+            deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await apiFetch(`/lists/${list.id}`, { method: 'DELETE' });
+                if (selectedList && selectedList.id === list.id) {
+                    resetTaskView();
+                }
+                await fetchLists();
+            });
+            li.appendChild(deleteBtn);
+
             li.addEventListener('click', () => {
-                selectedListId = list.id;
+                selectedList = list;
                 tasksHeader.textContent = `Tasks in "${list.title}"`;
                 taskForm.classList.remove('hidden');
                 fetchTasks(list.id);
-                // Update selected visual state
                 document.querySelectorAll('#todo-list li').forEach(item => item.classList.remove('selected'));
                 li.classList.add('selected');
             });
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = '✖';
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                deleteTodoList(list.id);
-            });
-
-            li.appendChild(deleteBtn);
-            todoListEl.appendChild(li);
+            listEl.appendChild(li);
         });
     };
 
@@ -259,25 +247,36 @@ function setupDashboard() {
         taskListEl.innerHTML = '';
         tasks.forEach(task => {
             const li = document.createElement('li');
-            li.textContent = task.title;
-            li.dataset.id = task.id;
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'task-title';
+            titleSpan.textContent = task.title;
+            titleSpan.addEventListener('dblclick', () => {
+                makeEditable(titleSpan, (newTitle) => 
+                    apiFetch(`/tasks/${task.id}`, { method: 'PUT', body: JSON.stringify({ ...task, title: newTitle }) })
+                );
+            });
+            li.appendChild(titleSpan);
 
             const deleteBtn = document.createElement('button');
             deleteBtn.textContent = '✖';
-            deleteBtn.addEventListener('click', () => deleteTask(task.id));
-
+            deleteBtn.addEventListener('click', async () => {
+                await apiFetch(`/tasks/${task.id}`, { method: 'DELETE' });
+                await fetchTasks(selectedList.id);
+            });
             li.appendChild(deleteBtn);
+
             taskListEl.appendChild(li);
         });
     };
     
     const resetTaskView = () => {
-        selectedListId = null;
+        selectedList = null;
         tasksHeader.textContent = 'Select a list to see tasks';
         taskForm.classList.add('hidden');
         taskListEl.innerHTML = '';
     };
 
     // --- Initial Load ---
-    fetchTodoLists();
+    fetchLists();
 }

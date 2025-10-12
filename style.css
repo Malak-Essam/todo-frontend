@@ -183,8 +183,47 @@ a:hover {
     align-items: center;
 }
 
+#task-list li .task-title {
+    flex-grow: 1;
+    cursor: pointer;
+}
+
+#task-list li .actions button {
+    font-size: 1rem;
+    padding: 0.2rem 0.5rem;
+    margin-left: 0.5rem;
+}
+
+#task-list li .actions .edit-btn {
+    color: #5c67f2;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+        height: 100%;
+    }
+    .lists-panel {
+        border-right: none;
+        padding-right: 0;
+        flex-basis: auto;
+        height: 40%;
+    }
+    .tasks-panel {
+        flex-basis: auto;
+        height: 60%;
+    }
+    .dashboard-container {
+        height: 95vh;
+    }
+}
+
 @media (max-width: 480px) {
-    .container {
-        padding: 1.5rem;
+    .container, .dashboard-container {
+        padding: 1rem;
+    }
+    body {
+        align-items: flex-start;
+        padding-top: 1rem;
     }
 }
