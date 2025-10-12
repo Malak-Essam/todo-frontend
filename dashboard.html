@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h2>Dashboard</h2>
+            <button id="logout-btn">Logout</button>
+        </div>
+        <div class="main-content">
+            <div class="lists-panel">
+                <h3>My Lists</h3>
+                <form id="todo-form">
+                    <input type="text" id="todo-input" placeholder="Add new list..." required>
+                    <button type="submit">Add</button>
+                </form>
+                <ul id="todo-list">
+                    <!-- Todo lists will be dynamically added here -->
+                </ul>
+            </div>
+            <div class="tasks-panel">
+                <h3 id="tasks-header">Select a list to see tasks</h3>
+                <form id="task-form" class="hidden">
+                    <input type="text" id="task-input" placeholder="Add new task..." required>
+                    <button type="submit">Add Task</button>
+                </form>
+                <ul id="task-list">
+                    <!-- Tasks will be dynamically added here -->
+                </ul>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
