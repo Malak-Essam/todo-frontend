@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8080/api'; // Assuming the backend runs on port 8080
+const API_URL = 'http://localhost:5555/api'; // Assuming the backend runs on port 5555
 
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('token');
@@ -76,18 +76,36 @@ function setupAuthForms() {
         const password = document.getElementById('register-password').value;
 
         try {
-            const response = await fetch(`${API_URL}/auth/register`, {
+            // Step 1: Register the user
+            const registerResponse = await fetch(`${API_URL}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, email: email, password: password, role: 'USER', enabled: true }),
             });
 
-            if (!response.ok) {
-                throw new Error('Registration failed');
+            if (!registerResponse.ok) {
+                const errorData = await registerResponse.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Registration failed.');
             }
 
-            alert('Registration successful! Please login.');
-            showLogin.click(); // Switch to login form
+            // Step 2: Automatically log in the new user
+            const loginResponse = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, password: password }),
+            });
+
+            if (!loginResponse.ok) {
+                // If auto-login fails, inform the user to log in manually
+                alert('Registration successful! Please log in.');
+                showLogin.click();
+                return;
+            }
+
+            const loginData = await loginResponse.json();
+            localStorage.setItem('token', loginData.token);
+            window.location.href = 'dashboard.html'; // Redirect directly to the dashboard
+
         } catch (error) {
             if (error instanceof TypeError && error.message === 'Failed to fetch') {
                 alert('Network error: Could not connect to the API. Please ensure the backend server is running and there are no CORS issues.');
@@ -106,6 +124,7 @@ function setupDashboard() {
     const listEl = document.getElementById('todo-list');
     const taskForm = document.getElementById('task-form');
     const taskInput = document.getElementById('task-input');
+    const taskDueDate = document.getElementById('task-due-date');
     const taskListEl = document.getElementById('task-list');
     const tasksHeader = document.getElementById('tasks-header');
 
@@ -148,9 +167,14 @@ function setupDashboard() {
     taskForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const title = taskInput.value.trim();
+        let dueDate = taskDueDate.value;
+        if (dueDate) {
+            dueDate += 'T00:00:00'; // Append time to match LocalDateTime
+        }
         if (title && selectedList) {
-            await apiFetch(`/tasks?listId=${selectedList.id}`, { method: 'POST', body: JSON.stringify({ title, status: 'PENDING' }) });
+            await apiFetch(`/tasks?listId=${selectedList.id}`, { method: 'POST', body: JSON.stringify({ title, status: 'PENDING', dueDate }) });
             taskInput.value = '';
+            taskDueDate.value = '';
             await fetchTasks(selectedList.id);
         }
     });
@@ -257,6 +281,13 @@ function setupDashboard() {
                 );
             });
             li.appendChild(titleSpan);
+
+            if (task.dueDate) {
+                const dueDateSpan = document.createElement('span');
+                dueDateSpan.className = 'due-date';
+                dueDateSpan.textContent = ` (Due: ${new Date(task.dueDate).toLocaleDateString()})`;
+                li.appendChild(dueDateSpan);
+            }
 
             const deleteBtn = document.createElement('button');
             deleteBtn.textContent = '✖';
