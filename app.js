@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5555/api'; // Assuming the backend runs on port 5555
+const API_URL = 'https://todolist-black-sun-6679-production.up.railway.app/api'; // Assuming the backend runs on port 5555
 
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('token');
